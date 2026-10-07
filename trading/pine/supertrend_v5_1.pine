@@ -1,0 +1,186 @@
+//@version=5
+// SuperTrend V5.1 — исправленная версия V5. Что изменено и почему: trading/docs/REVIEW.md
+strategy("⚡ SuperTrend V5.1 Adaptive Regime Engine",
+     overlay = true,
+     pyramiding = 0,
+     calc_on_every_tick = false,          // V5: true -> сигналы внутри бара, live != backtest
+     process_orders_on_close = false,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 10,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.05,             // taker Binance USDT-M VIP0
+     slippage = 2)                        // в тиках
+
+//====================================================
+// 🧩 INPUTS
+//====================================================
+atrLen          = input.int(12, "ATR Length", minval=1, group="Trend")
+atrSmoothLen    = input.int(21, "ATR Smoothing", minval=1, group="Trend")
+atrMultTrend    = input.float(2.6, "ATR Multiplier", step=0.1, group="Trend")
+entryWindow     = input.int(6, "Entry window after flip (bars, 0 = flip bar only)", minval=0, group="Trend")
+
+adxLen          = input.int(14, "ADX Length", group="Regime")
+adxThreshold    = input.float(18.0, "Trend Strength Threshold", group="Regime")
+
+bbLen           = input.int(20, "BB Length", group="Volatility")
+bbMult          = input.float(2.0, "BB Multiplier", group="Volatility")
+volMode         = input.string("Percentile", "BB width filter", options=["Percentile", "Absolute %"], group="Volatility")
+minBBWidth      = input.float(1.2, "Minimum BB Width % (Absolute)", step=0.1, group="Volatility")
+bbRankLen       = input.int(200, "BB width percentile lookback", group="Volatility")
+bbRankMin       = input.float(50, "Min BB width percentile", minval=0, maxval=100, group="Volatility")
+needExpanding   = input.bool(true, "Require BB expanding", group="Volatility")
+
+emaFilterLen    = input.int(200, "Market Bias EMA", group="Bias")
+slopeMode       = input.string("ATR", "Slope mode", options=["ATR", "Percent"], group="Bias")
+minSlope        = input.float(0.02, "EMA slope % / 10 bars (Percent)", group="Bias")
+minSlopeATR     = input.float(0.10, "EMA slope in ATR / 10 bars (ATR)", step=0.01, group="Bias")
+
+riskATR         = input.float(1.8, "Initial Stop ATR", group="Exits")
+rewardATR       = input.float(3.5, "Take Profit ATR", group="Exits")
+trailATR        = input.float(1.4, "Trailing ATR", group="Exits")
+useChopExit     = input.bool(true, "Anti-chop exit", group="Exits")
+
+useRiskSizing   = input.bool(false, "Risk-based sizing", group="Sizing")
+riskPct         = input.float(0.5, "Risk per trade % equity", step=0.1, group="Sizing")
+maxLev          = input.float(3.0, "Max leverage", step=0.5, group="Sizing")
+
+showBB          = input.bool(true, "Show Bollinger", group="Visuals")
+showEMA         = input.bool(true, "Show EMA Bias", group="Visuals")
+showSignals     = input.bool(true, "Show Signals", group="Visuals")
+
+//====================================================
+// 📊 VOLATILITY + TREND ENGINE
+//====================================================
+smoothATR = ta.ema(ta.atr(atrLen), atrSmoothLen)
+
+upBase = hl2 - atrMultTrend * smoothATR
+dnBase = hl2 + atrMultTrend * smoothATR
+
+var float upTrend = na
+var float dnTrend = na
+upTrend := close[1] > nz(upTrend[1]) ? math.max(upBase, nz(upTrend[1])) : upBase
+dnTrend := close[1] < nz(dnTrend[1]) ? math.min(dnBase, nz(dnTrend[1])) : dnBase
+
+var int trend = 1
+trend := trend == -1 and close > dnTrend ? 1 : trend == 1 and close < upTrend ? -1 : trend
+
+longFlip  = trend == 1 and trend[1] == -1
+shortFlip = trend == -1 and trend[1] == 1
+barsSinceFlip = ta.barssince(longFlip or shortFlip)
+
+//====================================================
+// 🌊 FILTERS
+//====================================================
+[_, _, adxValue] = ta.dmi(adxLen, adxLen)    // в Pine v5 нет ta.adx
+trendRegime = adxValue > adxThreshold
+
+emaBias  = ta.ema(close, emaFilterLen)
+emaSlope = slopeMode == "ATR" ? (emaBias - emaBias[10]) / smoothATR : (emaBias - emaBias[10]) / emaBias[10] * 100
+slopeThr = slopeMode == "ATR" ? minSlopeATR : minSlope
+bullBias = close > emaBias and emaSlope > slopeThr
+bearBias = close < emaBias and emaSlope < -slopeThr
+
+bbBasis = ta.sma(close, bbLen)
+bbDev   = ta.stdev(close, bbLen)
+bbUpper = bbBasis + bbDev * bbMult
+bbLower = bbBasis - bbDev * bbMult
+bbWidth = (bbUpper - bbLower) / bbBasis * 100
+bbRank  = ta.percentrank(bbWidth, bbRankLen)
+
+volOK = (volMode == "Percentile" ? bbRank > bbRankMin : bbWidth > minBBWidth) and (not needExpanding or bbWidth > bbWidth[1])
+
+//====================================================
+// 🧠 ENTRIES
+//====================================================
+inWindow   = entryWindow == 0 ? true : barsSinceFlip <= entryWindow
+finalLong  = barstate.isconfirmed and (entryWindow == 0 ? longFlip  : trend == 1  and inWindow) and trendRegime and bullBias and volOK
+finalShort = barstate.isconfirmed and (entryWindow == 0 ? shortFlip : trend == -1 and inWindow) and trendRegime and bearBias and volOK
+
+calcQty() =>
+    useRiskSizing ? math.min(strategy.equity * riskPct / 100 / (riskATR * smoothATR), strategy.equity * maxLev / close) : na
+
+var float sigClose = na
+var float sigATR   = na
+
+if finalLong and strategy.position_size <= 0
+    sigClose := close
+    sigATR   := smoothATR
+    if useRiskSizing
+        strategy.entry("LONG", strategy.long, qty = calcQty())
+    else
+        strategy.entry("LONG", strategy.long)
+    // защита активна с бара исполнения (в V5 первый бар позиции был без стопа)
+    strategy.exit("LONG EXIT", from_entry = "LONG", stop = close - smoothATR * riskATR, limit = close + smoothATR * rewardATR)
+
+if finalShort and strategy.position_size >= 0
+    sigClose := close
+    sigATR   := smoothATR
+    if useRiskSizing
+        strategy.entry("SHORT", strategy.short, qty = calcQty())
+    else
+        strategy.entry("SHORT", strategy.short)
+    strategy.exit("SHORT EXIT", from_entry = "SHORT", stop = close + smoothATR * riskATR, limit = close - smoothATR * rewardATR)
+
+//====================================================
+// 🛡️ EXITS: фиксированный TP + стоп-храповик (только в сторону прибыли)
+//====================================================
+var float trailStop = na
+var float tpLevel   = na
+var float entryATR  = na
+
+newLong  = strategy.position_size > 0 and nz(strategy.position_size[1]) <= 0
+newShort = strategy.position_size < 0 and nz(strategy.position_size[1]) >= 0
+
+if newLong
+    entryATR  := sigATR
+    trailStop := math.max(sigClose - riskATR * sigATR, strategy.position_avg_price - riskATR * entryATR)
+    tpLevel   := strategy.position_avg_price + rewardATR * entryATR
+if newShort
+    entryATR  := sigATR
+    trailStop := math.min(sigClose + riskATR * sigATR, strategy.position_avg_price + riskATR * entryATR)
+    tpLevel   := strategy.position_avg_price - rewardATR * entryATR
+
+if strategy.position_size > 0
+    trailStop := math.max(trailStop, close - smoothATR * trailATR)
+    strategy.exit("LONG EXIT", from_entry = "LONG", stop = trailStop, limit = tpLevel)
+
+if strategy.position_size < 0
+    trailStop := math.min(trailStop, close + smoothATR * trailATR)
+    strategy.exit("SHORT EXIT", from_entry = "SHORT", stop = trailStop, limit = tpLevel)
+
+//====================================================
+// 🚫 ANTI-CHOP EXIT
+//====================================================
+weakTrend   = adxValue < adxThreshold * 0.7
+volCollapse = volMode == "Percentile" ? bbRank < bbRankMin * 0.5 : bbWidth < minBBWidth * 0.7
+if useChopExit and strategy.position_size != 0 and weakTrend and volCollapse
+    strategy.close_all(comment = "Chop Exit")
+
+//====================================================
+// 🎨 VISUALS
+//====================================================
+plot(trend == 1 ? upTrend : na, "Bull Trend", color.lime, 3, plot.style_linebr)
+plot(trend == -1 ? dnTrend : na, "Bear Trend", color.red, 3, plot.style_linebr)
+plot(showEMA ? emaBias : na, "EMA Bias", color.gray, 2)
+plot(showBB ? bbUpper : na, "BB Upper", color.orange)
+plot(showBB ? bbLower : na, "BB Lower", color.orange)
+plot(showBB ? bbBasis : na, "BB Basis", color.new(color.gray, 50))
+plot(strategy.position_size != 0 ? trailStop : na, "Stop", color.fuchsia, 1, plot.style_linebr)
+plot(strategy.position_size != 0 ? tpLevel : na, "TP", color.aqua, 1, plot.style_linebr)
+
+plotshape(showSignals and finalLong, "LONG", shape.triangleup, location.belowbar, color.lime, size = size.small)
+plotshape(showSignals and finalShort, "SHORT", shape.triangledown, location.abovebar, color.red, size = size.small)
+bgcolor(trendRegime ? color.new(color.green, 95) : color.new(color.red, 95))
+
+//====================================================
+// 📋 ALERTS (JSON для webhook-бота; только по закрытию бара)
+//====================================================
+alertJson(side, stopLvl, tpLvl) =>
+    '{"strategy":"ST_V5.1","symbol":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","side":"' + side +
+     '","price":' + str.tostring(close) + ',"stop":' + str.tostring(stopLvl) + ',"tp":' + str.tostring(tpLvl) +
+     ',"atr":' + str.tostring(smoothATR) + ',"time":' + str.tostring(time_close) + '}'
+
+if finalLong and strategy.position_size <= 0
+    alert(alertJson("long", close - smoothATR * riskATR, close + smoothATR * rewardATR), alert.freq_once_per_bar_close)
+if finalShort and strategy.position_size >= 0
+    alert(alertJson("short", close + smoothATR * riskATR, close - smoothATR * rewardATR), alert.freq_once_per_bar_close)
