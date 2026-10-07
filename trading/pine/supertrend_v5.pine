@@ -1,0 +1,313 @@
+//@version=5
+strategy("⚡ SuperTrend V5 Adaptive Regime Engine",
+     overlay = true,
+     pyramiding = 0,
+     calc_on_every_tick = true,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 10,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.04)
+
+//====================================================
+// 🔧 CORE PHILOSOPHY
+//====================================================
+// V5 Architecture:
+// - Clean trend engine
+// - Adaptive ATR
+// - Regime filter
+// - Volatility expansion
+// - Anti-chop protection
+// - ATR exits
+// - Non-conflicting logic
+//====================================================
+
+//====================================================
+// 🧩 INPUTS
+//====================================================
+
+// --- Trend Engine
+atrLen          = input.int(12, "ATR Length", minval=1)
+atrSmoothLen    = input.int(21, "ATR Smoothing")
+atrMultTrend    = input.float(2.6, "ATR Multiplier", step=0.1)
+
+// --- Regime Detection
+adxLen          = input.int(14, "ADX Length")
+adxThreshold    = input.float(18.0, "Trend Strength Threshold")
+
+// --- Volatility Expansion
+bbLen           = input.int(20, "BB Length")
+bbMult          = input.float(2.0, "BB Multiplier")
+minBBWidth      = input.float(1.2, "Minimum BB Width %", step=0.1)
+
+// --- Exit System
+riskATR         = input.float(1.8, "Stop ATR Multiplier")
+rewardATR       = input.float(3.5, "Take Profit ATR Multiplier")
+trailATR        = input.float(1.4, "Trailing ATR Multiplier")
+
+// --- Anti Chop
+emaFilterLen    = input.int(200, "Market Bias EMA")
+minSlope        = input.float(0.02, "EMA Slope Filter")
+
+// --- Visuals
+showBB          = input.bool(true, "Show Bollinger")
+showEMA         = input.bool(true, "Show EMA Bias")
+showSignals     = input.bool(true, "Show Signals")
+
+//====================================================
+// 📊 VOLATILITY ENGINE
+//====================================================
+
+// Adaptive ATR
+rawATR      = ta.atr(atrLen)
+smoothATR   = ta.ema(rawATR, atrSmoothLen)
+
+//====================================================
+// 📈 TREND ENGINE
+//====================================================
+
+upBase = hl2 - atrMultTrend * smoothATR
+dnBase = hl2 + atrMultTrend * smoothATR
+
+var float upTrend = na
+var float dnTrend = na
+
+upTrend := close[1] > nz(upTrend[1]) ?
+     math.max(upBase, nz(upTrend[1])) :
+     upBase
+
+dnTrend := close[1] < nz(dnTrend[1]) ?
+     math.min(dnBase, nz(dnTrend[1])) :
+     dnBase
+
+var int trend = 1
+
+trend := trend == -1 and close > dnTrend ? 1 :
+          trend == 1 and close < upTrend ? -1 :
+          trend
+
+longSignal  = trend == 1 and trend[1] == -1
+shortSignal = trend == -1 and trend[1] == 1
+
+//====================================================
+// 🌊 REGIME FILTER
+//====================================================
+
+// ADX Trend Strength
+adxValue = ta.adx(adxLen)
+trendRegime = adxValue > adxThreshold
+
+//====================================================
+// 📡 MARKET BIAS FILTER
+//====================================================
+
+emaBias = ta.ema(close, emaFilterLen)
+
+emaSlope = ((emaBias - emaBias[10]) / emaBias[10]) * 100
+
+bullBias = close > emaBias and emaSlope > minSlope
+bearBias = close < emaBias and emaSlope < -minSlope
+
+//====================================================
+// 📦 VOLATILITY EXPANSION FILTER
+//====================================================
+
+bbBasis = ta.sma(close, bbLen)
+bbDev   = ta.stdev(close, bbLen)
+
+bbUpper = bbBasis + bbDev * bbMult
+bbLower = bbBasis - bbDev * bbMult
+
+bbWidth = ((bbUpper - bbLower) / bbBasis) * 100
+
+volatilityExpansion = bbWidth > minBBWidth
+bbExpanding = bbWidth > bbWidth[1]
+
+//====================================================
+// 🧠 SMART ENTRY ENGINE
+//====================================================
+
+// Long Conditions
+allowLong =
+     trendRegime and
+     bullBias and
+     volatilityExpansion and
+     bbExpanding
+
+// Short Conditions
+allowShort =
+     trendRegime and
+     bearBias and
+     volatilityExpansion and
+     bbExpanding
+
+finalLong =
+     longSignal and
+     allowLong
+
+finalShort =
+     shortSignal and
+     allowShort
+
+//====================================================
+// 🚀 POSITION ENGINE
+//====================================================
+
+if finalLong and strategy.position_size <= 0
+    strategy.close("SHORT")
+    strategy.entry("LONG", strategy.long)
+
+if finalShort and strategy.position_size >= 0
+    strategy.close("LONG")
+    strategy.entry("SHORT", strategy.short)
+
+//====================================================
+// 🛡️ ATR RISK ENGINE
+//====================================================
+
+longStop =
+     strategy.position_avg_price - smoothATR * riskATR
+
+longTP =
+     strategy.position_avg_price + smoothATR * rewardATR
+
+shortStop =
+     strategy.position_avg_price + smoothATR * riskATR
+
+shortTP =
+     strategy.position_avg_price - smoothATR * rewardATR
+
+//====================================================
+// 📈 ADAPTIVE TRAILING ENGINE
+//====================================================
+
+longTrail =
+     close - smoothATR * trailATR
+
+shortTrail =
+     close + smoothATR * trailATR
+
+//====================================================
+// 🔓 EXIT ENGINE
+//====================================================
+
+if strategy.position_size > 0
+
+    strategy.exit(
+         "LONG EXIT",
+         from_entry = "LONG",
+         stop = math.max(longStop, longTrail),
+         limit = longTP
+     )
+
+if strategy.position_size < 0
+
+    strategy.exit(
+         "SHORT EXIT",
+         from_entry = "SHORT",
+         stop = math.min(shortStop, shortTrail),
+         limit = shortTP
+     )
+
+//====================================================
+// 🚫 ANTI-CHOP EMERGENCY EXIT
+//====================================================
+
+weakTrend =
+     adxValue < adxThreshold * 0.7
+
+volatilityCollapse =
+     bbWidth < minBBWidth * 0.7
+
+if strategy.position_size != 0 and weakTrend and volatilityCollapse
+    strategy.close_all(comment = "Chop Exit")
+
+//====================================================
+// 🎨 VISUALS
+//====================================================
+
+// --- SuperTrend
+plot(
+     trend == 1 ? upTrend : na,
+     title = "Bull Trend",
+     color = color.lime,
+     linewidth = 3
+)
+
+plot(
+     trend == -1 ? dnTrend : na,
+     title = "Bear Trend",
+     color = color.red,
+     linewidth = 3
+)
+
+// --- EMA Bias
+plot(
+     showEMA ? emaBias : na,
+     title = "EMA Bias",
+     color = color.gray,
+     linewidth = 2
+)
+
+// --- Bollinger
+plot(
+     showBB ? bbUpper : na,
+     color = color.orange
+)
+
+plot(
+     showBB ? bbLower : na,
+     color = color.orange
+)
+
+plot(
+     showBB ? bbBasis : na,
+     color = color.new(color.gray, 50)
+)
+
+//====================================================
+// 🔔 SIGNALS
+//====================================================
+
+plotshape(
+     showSignals and finalLong,
+     title = "LONG",
+     style = shape.triangleup,
+     location = location.belowbar,
+     color = color.lime,
+     size = size.small
+)
+
+plotshape(
+     showSignals and finalShort,
+     title = "SHORT",
+     style = shape.triangledown,
+     location = location.abovebar,
+     color = color.red,
+     size = size.small
+)
+
+//====================================================
+// 📊 BACKGROUND REGIME
+//====================================================
+
+bgcolor(
+     trendRegime ?
+     color.new(color.green, 95) :
+     color.new(color.red, 95)
+)
+
+//====================================================
+// 📋 ALERTS
+//====================================================
+
+alertcondition(
+     finalLong,
+     title = "LONG SIGNAL",
+     message = "SuperTrend V5 LONG"
+)
+
+alertcondition(
+     finalShort,
+     title = "SHORT SIGNAL",
+     message = "SuperTrend V5 SHORT"
+)
