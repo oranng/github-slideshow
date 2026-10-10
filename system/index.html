@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#060a13"></head><body style="margin:0">
+<title>СИСТЕМА</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one-column "system window" app — sticky player header, stacked holographic panels, bottom tab bar. Deliberately dark-only. */
+:root{
+  --void:#060a13; --panel:#0b1322; --panel2:#101b30; --line:rgba(120,175,255,.22); --line-hi:rgba(140,195,255,.55);
+  --ice:#86c8ff; --ice-deep:#3c8dde; --text:#dce7fb; --dim:#7d90b2;
+  --gold:#e9c46a; --red:#ff6f7d; --green:#6fe0ae; --violet:#b48cff;
+  --f-display:"Russo One","Arial Black",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--void);color:var(--text);font:15px/1.5 var(--f-body);-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(60rem 30rem at 50% -10rem,rgba(60,141,222,.18),transparent 70%),
+  repeating-linear-gradient(0deg,rgba(134,200,255,.025) 0 1px,transparent 1px 4px)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ice);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--void);border:1px solid var(--line);border-radius:4px;padding:10px 12px;width:100%}
+.app{position:relative;z-index:1;max-width:640px;margin:0 auto;padding:0 16px 110px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.dim{color:var(--dim)}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;margin:0;text-wrap:balance;letter-spacing:.02em}
+
+/* header */
+.hud{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin:0 -16px;padding:12px 16px 10px;
+  background:linear-gradient(var(--void) 70%,rgba(6,10,19,.85));border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+.hud-row{display:flex;align-items:center;gap:12px}
+.rank-badge{flex:none;width:46px;height:46px;display:grid;place-items:center;font-family:var(--f-display);font-size:24px;
+  border:1px solid var(--line-hi);background:var(--panel);color:var(--ice);clip-path:polygon(12% 0,88% 0,100% 12%,100% 88%,88% 100%,12% 100%,0 88%,0 12%);
+  text-shadow:0 0 12px rgba(134,200,255,.6)}
+.who{min-width:0;flex:1}
+.who .name{font-family:var(--f-display);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .title{font-size:12px;color:var(--violet);letter-spacing:.04em}
+.lvl{text-align:right;flex:none}
+.lvl b{font-family:var(--f-display);font-size:22px;font-weight:400;color:var(--ice)}
+.lvl small{display:block;font-size:11px;color:var(--dim);letter-spacing:.12em}
+.xpbar{margin-top:8px;height:6px;background:rgba(134,200,255,.1);border-radius:3px;overflow:hidden}
+.xpbar i{display:block;height:100%;background:linear-gradient(90deg,var(--ice-deep),var(--ice));box-shadow:0 0 10px var(--ice);transition:width .5s}
+.hud-meta{display:flex;justify-content:space-between;margin-top:5px;font-size:12px;color:var(--dim)}
+.gold{color:var(--gold)}
+
+/* panels */
+.stack{display:flex;flex-direction:column;gap:16px;padding-top:16px}
+.win{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);padding:16px;border-radius:2px}
+.win::before,.win::after{content:"";position:absolute;width:12px;height:12px;border:2px solid var(--ice);pointer-events:none}
+.win::before{top:-2px;left:-2px;border-right:0;border-bottom:0}
+.win::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+.win-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}
+.tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;color:var(--ice);text-transform:uppercase}
+.win h2{font-size:18px}
+.lead{color:var(--dim);font-size:13px;margin:4px 0 0}
+
+/* quest rows */
+.q{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.q:first-of-type{border-top:0}
+.chk{flex:none;width:26px;height:26px;border:1.5px solid var(--line-hi);border-radius:3px;display:grid;place-items:center;margin-top:1px;transition:.15s}
+.chk svg{width:16px;height:16px;opacity:0;stroke:var(--void);stroke-width:3;fill:none}
+.q.done .chk{background:var(--ice);border-color:var(--ice);box-shadow:0 0 12px rgba(134,200,255,.5)}
+.q.done .chk svg{opacity:1}
+.q-body{flex:1;min-width:0}
+.q-t{font-weight:500}
+.q.done .q-t{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(134,200,255,.4)}
+.q-hint{font-size:12.5px;color:var(--dim);margin-top:2px}
+.q-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.chip{font-family:var(--f-mono);font-size:11px;padding:2px 6px;border:1px solid var(--line);border-radius:2px;color:var(--dim);white-space:nowrap}
+.chip.r-E{color:#9fb0c8}.chip.r-D{color:var(--green)}.chip.r-C{color:var(--ice)}.chip.r-B{color:var(--violet)}.chip.r-A{color:var(--gold)}.chip.r-S{color:var(--red)}
+.chip.xp{color:var(--ice)} .chip.g{color:var(--gold)}
+.mini{font-size:12px;color:var(--dim);padding:4px 8px;border:1px solid var(--line);border-radius:2px}
+.mini:hover{color:var(--text);border-color:var(--line-hi)}
+.q.pen{background:rgba(255,111,125,.06);margin:0 -16px;padding:12px 16px;border-top:1px solid rgba(255,111,125,.35)}
+.q.pen .chk{border-color:var(--red)}
+.q.pen.done .chk{background:var(--red);border-color:var(--red)}
+
+/* mandatory */
+.mand{border-color:var(--line-hi);box-shadow:0 0 0 1px rgba(134,200,255,.06),0 0 40px -10px rgba(60,141,222,.35)}
+.mand-goal{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mg{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:2px;text-align:left}
+.mg .chk{width:22px;height:22px}
+.mg.done{border-color:var(--ice);background:rgba(134,200,255,.07)}
+.mg.done .chk{background:var(--ice);border-color:var(--ice)}.mg.done .chk svg{opacity:1}
+.mg span{font-size:13px;line-height:1.3}
+.warn{color:var(--red);font-size:13px;margin-top:10px}
+.ok{color:var(--green);font-size:13px;margin-top:10px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+.st{display:flex;flex-direction:column;gap:4px}
+.st-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.st-top span{font-size:13px}
+.st-top b{font-family:var(--f-mono);font-size:15px;color:var(--ice)}
+.st-bar{height:3px;background:rgba(134,200,255,.1)}
+.st-bar i{display:block;height:100%;background:var(--ice)}
+.plus{width:24px;height:24px;border:1px solid var(--gold);color:var(--gold);border-radius:2px;font-family:var(--f-mono);line-height:1}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.kpi b{display:block;font-family:var(--f-display);font-weight:400;font-size:24px;color:var(--text)}
+.kpi span{font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.quote{font-size:14px;font-style:italic;color:var(--text);border-left:2px solid var(--ice);padding-left:12px;margin:0}
+
+/* paths */
+.path{border-top:1px solid var(--line);padding:14px 0}
+.path:first-of-type{border-top:0;padding-top:0}
+.path-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.path-h h3{font-size:15px}
+.steps{display:flex;gap:3px;margin:8px 0}
+.steps i{flex:1;height:4px;background:rgba(134,200,255,.12)}
+.steps i.on{background:var(--ice)}
+.cur{font-weight:500}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:1px solid var(--ice);color:var(--ice);
+  font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;border-radius:2px;background:rgba(134,200,255,.06)}
+.btn:hover{background:rgba(134,200,255,.14)}
+.btn.solid{background:var(--ice);color:var(--void)}
+.btn.danger{border-color:var(--red);color:var(--red);background:rgba(255,111,125,.06)}
+.btn.goldb{border-color:var(--gold);color:var(--gold);background:rgba(233,196,106,.06)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{min-width:0}
+.form{display:grid;gap:8px;margin-top:12px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* rewards */
+.rw{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.rw:first-of-type{border-top:0}
+.rw .t{flex:1;min-width:0}
+.x{color:var(--dim);font-size:18px;padding:4px 8px}
+
+/* journal */
+.heat{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.heat i{aspect-ratio:1;border-radius:2px;background:rgba(134,200,255,.06);border:1px solid transparent;max-width:100%}
+.heat i.l1{background:rgba(134,200,255,.22)}.heat i.l2{background:rgba(134,200,255,.45)}.heat i.l3{background:var(--ice);box-shadow:0 0 8px rgba(134,200,255,.5)}
+.heat i.miss{border-color:rgba(255,111,125,.5)}
+.heat i.today{outline:1px solid var(--gold);outline-offset:1px}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
+.log{list-style:none;margin:0;padding:0;font-size:13px}
+.log li{padding:6px 0;border-top:1px solid var(--line);display:flex;gap:10px}
+.log li:first-child{border-top:0}
+.log time{font-family:var(--f-mono);font-size:11px;color:var(--dim);flex:none;padding-top:2px}
+.titles{display:flex;flex-wrap:wrap;gap:8px}
+.ttl{padding:6px 10px;border:1px solid var(--line);border-radius:2px;font-size:13px}
+.ttl.on{border-color:var(--violet);color:var(--violet)}
+.ttl.lock{opacity:.35}
+
+/* nav */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(8,13,24,.96);border-top:1px solid var(--line);
+  padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center}
+.nav-in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:640px}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;font-size:11px;color:var(--dim);letter-spacing:.02em}
+.nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6}
+.nav button.on{color:var(--ice)}
+.nav button.on svg{filter:drop-shadow(0 0 6px rgba(134,200,255,.7))}
+.dot{position:relative}
+.dot::after{content:"";position:absolute;top:2px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;background:var(--red)}
+
+/* system message */
+.sys{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px 16px;background:rgba(3,6,12,.72);backdrop-filter:blur(3px)}
+.sys .win{width:100%;max-width:420px;text-align:center;padding:26px 20px;animation:pop .35s ease-out}
+.sys .tag{display:block;margin-bottom:12px}
+.sys h2{font-size:22px;color:var(--ice);text-shadow:0 0 18px rgba(134,200,255,.5);margin-bottom:10px}
+.sys p{margin:0 0 18px;color:var(--text)}
+.sys.bad h2{color:var(--red);text-shadow:0 0 18px rgba(255,111,125,.5)}
+@keyframes pop{from{transform:scale(.94);opacity:.4}to{transform:none;opacity:1}}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:15;
+  background:var(--panel2);border:1px solid var(--line-hi);padding:8px 14px;font-size:13px;border-radius:2px;max-width:calc(100% - 32px);transition:opacity .3s}
+.toast b{color:var(--ice);font-family:var(--f-mono);font-weight:500}
+
+/* onboarding */
+.awake{min-height:100%;display:grid;place-items:center;padding-block:40px}
+.awake .win{max-width:440px;width:100%}
+.awake h1{font-size:30px;color:var(--ice);text-shadow:0 0 22px rgba(134,200,255,.45);margin:6px 0 12px}
+.awake p{color:var(--dim);margin:0 0 14px}
+.awake ul{margin:0 0 18px;padding-left:18px;color:var(--text);font-size:14px}
+textarea{min-height:90px;font-family:var(--f-mono);font-size:11px}
+@media (max-width:380px){.mand-goal{grid-template-columns:1fr}.stats{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app" id="app"></div>
+<nav class="nav" id="nav" hidden><div class="nav-in" id="navIn"></div></nav>
+<div id="layer"></div>
+
+<script>
+(function(){
+"use strict";
+/* ================= DATA ================= */
+const STATS={str:["Сила","СИЛ"],vit:["Выносливость","ВЫН"],int:["Интеллект","ИНТ"],wil:["Воля","ВОЛ"],cha:["Харизма","ХАР"],cap:["Капитал","КАП"]};
+const QXP={E:15,D:25,C:40,B:60,A:90,S:150};
+const RANKS=[["E",1],["D",10],["C",20],["B",35],["A",50],["S",70]];
+const RANK_NAME={E:"Охотник ранга E",D:"Охотник ранга D",C:"Охотник ранга C",B:"Охотник ранга B",A:"Охотник ранга A",S:"Охотник ранга S"};
+const req=l=>100+15*(l-1);
+const rankOf=l=>{let r="E";for(const [k,m] of RANKS) if(l>=m) r=k;return r;};
+
+// [название, ранг, подсказка]
+const POOLS={
+ mind:{stat:"int",items:[
+  ["Прочитай 20 страниц нон-фикшн книги","D","После чтения запиши одну мысль, которую применишь."],
+  ["30 минут изучай иностранный язык","D","Лучше каждый день по чуть-чуть, чем раз в неделю час."],
+  ["Посмотри урок по своей профессии и выпиши 3 идеи","D","Идеи без записи забываются за сутки."],
+  ["Выучи 15 новых слов","E","Карточки с интервальным повторением работают лучше списков."],
+  ["Реши 3 задачи: логика, математика или код","C","Сложное мышление качается так же, как мышцы."],
+  ["Два помидора по 25 минут на изучение нового навыка","C","25 минут фокуса, 5 минут отдыха, телефон в другой комнате."],
+  ["Объясни вслух сложную тему, которую изучаешь","C","Метод Фейнмана: не можешь объяснить просто — не понял."],
+  ["Пройди один урок онлайн-курса до конца","D","Незаконченные курсы ничего не дают. Доводи до конца."],
+  ["Запиши 10 идей на любую тему","D","Тренировка «мышцы идей». Плохие идеи тоже считаются."],
+  ["Напиши 300 слов о том, о чём сейчас думаешь","C","Письмо — это мышление на бумаге."],
+  ["Послушай образовательный подкаст на прогулке","E","Выбирай темы, которые двигают твои цели."],
+  ["Разбери одну свою ошибку за неделю: причина и вывод","D","Опыт без анализа — просто прожитое время."],
+  ["Изучи одну ментальную модель и примени её к своей задаче","C","Например: принцип Парето, инверсия, второй порядок последствий."]
+ ]},
+ money:{stat:"cap",items:[
+  ["Запиши все траты за сегодня","E","Невозможно управлять тем, что не измеряешь."],
+  ["Найди одну подписку или расход, который можно отменить","D","Мелкие регулярные траты съедают больше всего."],
+  ["Отложи любую сумму в копилку или на накопительный счёт","D","Сначала заплати себе, потом всем остальным."],
+  ["45 минут на проект, который может приносить деньги","B","Навык, продукт, фриланс — что угодно, что можно продать."],
+  ["Изучи 3 вакансии или заказа в своей сфере: какие навыки требуют","D","Рынок сам говорит, чему учиться."],
+  ["Сделай одно действие по поиску клиентов или работы","C","Отклик, письмо, сообщение. Деньги приходят через людей."],
+  ["Прочитай статью о личных финансах или инвестициях","E","Сложный процент работает и для знаний."],
+  ["Добавь в резюме или портфолио один результат с цифрами","C","«Увеличил продажи на 15%» сильнее, чем «отвечал за продажи»."],
+  ["Посчитай свой доход в час и придумай, как поднять его на 20%","C","Сколько стоит час твоего времени сейчас?"],
+  ["Выставь на продажу одну ненужную вещь","D","Освобождаешь место и получаешь первый «внешний» доход."],
+  ["1 час глубокой работы над главной рабочей задачей","B","Без уведомлений и соцсетей. Это и есть твоя ценность на рынке."],
+  ["Выясни, сколько платят за навык, который хочешь освоить","E","Цель становится реальной, когда у неё есть цена."],
+  ["Запиши 3 способа заработать на том, что ты уже умеешь","D","Начать проще с того, что у тебя уже есть."],
+  ["Сравни свою зарплату с рынком","D","Если платят меньше рынка, это повод говорить о повышении или искать работу."]
+ ]},
+ will:{stat:"wil",items:[
+  ["Встань по первому будильнику","D","Первая победа дня задаёт тон остальному."],
+  ["Не заходи в соцсети до 12:00","C","Утро — для твоих целей, не для чужих лент."],
+  ["10 минут медитации","D","Сядь, закрой глаза, следи за дыханием. Отвлёкся — вернись."],
+  ["Холодный душ — минимум 1 минута","C","Тренирует умение делать неприятное по решению."],
+  ["Весь день без сахара и фастфуда","C","Стабильная энергия вместо скачков и провалов."],
+  ["Не больше 1,5 часа экранного времени на развлечения","B","Проверь статистику телефона вечером."],
+  ["Сделай самое неприятное дело дня первым","C","«Съешь лягушку» с утра — дальше станет легче."],
+  ["Ляг спать до 23:30","D","Сон — главный бустер всех характеристик."],
+  ["Вечером напиши план на завтра: 3 главные задачи","E","Утром не тратишь силу воли на решение «что делать»."],
+  ["15 минут наведи порядок в комнате и на рабочем месте","E","Порядок вокруг помогает держать порядок в голове."],
+  ["Выпей 2 литра воды","E","Обезвоживание бьёт по концентрации раньше, чем по жажде."],
+  ["2 часа без телефона: он лежит в другой комнате","B","Почувствуй, сколько времени у тебя на самом деле."],
+  ["Вечерний дневник: что сделал, что улучшить завтра","D","Три строки — уже достаточно."]
+ ]},
+ social:{stat:"cha",items:[
+  ["Заговори с незнакомым человеком","C","Продавец, сосед, коллега. Просто начни."],
+  ["Позвони родным или другу, с которым давно не говорил","D","Связи держатся на внимании."],
+  ["Сделай кому-то искренний конкретный комплимент","E","Конкретный: не «ты классный», а за что именно."],
+  ["Запиши 1-минутное видео, где рассказываешь о своей цели","C","Пересмотри: следи за паузами, темпом, словами-паразитами."],
+  ["Помоги кому-то, ничего не ожидая взамен","D","Репутация строится из таких поступков."],
+  ["Напиши благодарность человеку, который на тебя повлиял","D","Займёт две минуты, а человек запомнит."],
+  ["Выскажи свою идею вслух на работе или учёбе","C","Тебя запомнят по идеям, а не по молчанию."],
+  ["Напиши одному интересному человеку в своей сфере","B","Короткий вопрос или благодарность за его работу."],
+  ["Весь день держи прямую осанку и зрительный контакт","D","Уверенность сначала видно по телу."],
+  ["Откажись от того, что тебе не нужно","C","Каждое «да» чужим планам — это «нет» своим."]
+ ]},
+ body:{stat:"vit",items:[
+  ["Пройди 10 000 шагов","D","Прогулки, лестницы — всё считается."],
+  ["20 минут растяжки","E","Гибкость — защита от травм."],
+  ["Силовая тренировка 45 минут","B","Зал или дом: подтягивания, отжимания, выпады, планка."],
+  ["Съешь 3 порции овощей","E","Простое правило питания, которое работает."],
+  ["Поспи 7–8 часов","D","Восстановление — часть тренировки."],
+  ["Пробеги 3 км","C","Темп не важен, важно добежать."],
+  ["Планка: 3 подхода до отказа","C","Запиши результат и побей его в следующий раз."],
+  ["Ешь белок в каждый приём пищи","D","Мясо, рыба, яйца, творог, бобовые."]
+ ]}
+};
+const PENALTIES=[
+ "ШТРАФ: 100 бёрпи за день (можно частями)",
+ "ШТРАФ: 30 минут интенсивного кардио",
+ "ШТРАФ: 24 часа без соцсетей и видео",
+ "ШТРАФ: 5 км пешком без телефона в руках",
+ "ШТРАФ: выполни вчерашний обязательный квест в двойном объёме"
+];
+const BOSSES=[
+ ["Повелитель Сахара: неделя без сладкого","wil","Семь дней без сладостей и сладких напитков."],
+ ["Страж Прокрастинации: закончи дело, которое откладываешь больше месяца","wil","Ты знаешь, о каком деле речь."],
+ ["Железный Голем: 5 тренировок за неделю","str","Любые полноценные тренировки от 30 минут."],
+ ["Хранитель Знаний: прочитай книгу целиком","int","Можно продолжить начатую, главное — дочитать за эту неделю."],
+ ["Король Монет: заработай первые деньги на своём навыке","cap","Любая сумма от любого клиента. Первый рубль самый трудный."],
+ ["Демон Отвлечений: 10 часов глубокой работы за неделю","int","Считай только время без телефона и мессенджеров."],
+ ["Тень Одиночества: 3 содержательные встречи или разговора","cha","Живые встречи или долгие звонки, не переписка."],
+ ["Казначей: составь бюджет на месяц и держись его всю неделю","cap","Метод 50/30/20: нужды, желания, накопления."],
+ ["Ночной Охотник: 7 дней подряд ложись до 23:30","vit","Без исключений на выходные."],
+ ["Цифровой Призрак: неделя без бесконечных лент (TikTok, Reels, Shorts)","wil","Удали приложения на 7 дней."],
+ ["Оратор Бездны: выступи перед людьми или опубликуй видео о своей теме","cha","Хотя бы перед 3 слушателями."],
+ ["Архитектор: сделай и покажи людям небольшой проект","int","Сайт, статья, дизайн, код, видео — что-то готовое."]
+];
+const PATHS=[
+ {k:"money",name:"Путь Капитала",stat:"cap",desc:"От контроля над тратами до своего источника дохода.",steps:[
+  ["Сделай финансовый снимок: доходы, расходы, долги, накопления","Таблица или заметка. Всё честно, до рубля."],
+  ["Веди учёт всех трат 14 дней подряд","Приложение или заметки — главное без пропусков."],
+  ["Составь бюджет на месяц по правилу 50/30/20","50% — нужды, 30% — желания, 20% — накопления и долги."],
+  ["Собери подушку безопасности на 1 месяц расходов","Отдельный счёт, который не трогаешь."],
+  ["Выбери высокооплачиваемый навык и составь план обучения на 90 дней","Программирование, дизайн, продажи, маркетинг, английский, монтаж…"],
+  ["Получи первые деньги не с основной работы","Фриланс, заказ, продажа своего продукта. Любая сумма."],
+  ["Подними доход на 20%","Повышение, новая работа или постоянные клиенты."],
+  ["Расширь подушку безопасности до 3–6 месяцев расходов","Это свобода говорить «нет»."],
+  ["Начни ежемесячно инвестировать фиксированный процент дохода","Регулярность важнее суммы."],
+  ["Доведи доход от своего дела до 10% основного","Твой первый независимый источник."]
+ ]},
+ {k:"body",name:"Путь Тела",stat:"str",desc:"Сила, выносливость и энергия на весь день.",steps:[
+  ["Замерь старт: вес, талия, максимум отжиманий, подтягиваний, время на 1 км","Сфотографируй себя. Через 3 месяца сравнишь."],
+  ["Тренируйся 3 раза в неделю 4 недели подряд","Пропустил неделю — начни отсчёт заново."],
+  ["Сделай 50 отжиманий подряд","Без отдыха, с полной амплитудой."],
+  ["Подтянись 10 раз","Начни с негативов и австралийских подтягиваний."],
+  ["Пробеги 5 км без остановки","Программа «с дивана до 5 км» — 8–9 недель."],
+  ["Держи режим сна 21 день","Ложись и вставай в одно время ± 30 минут."],
+  ["Достигни целевого веса или процента жира","Цель — из первого шага."],
+  ["Пробеги 10 км","Ты уже другой человек, чем на первом шаге."]
+ ]},
+ {k:"mind",name:"Путь Разума",stat:"int",desc:"Знания, которые превращаются в результат.",steps:[
+  ["Выбери главную область знаний на этот год","Одна область, которая сильнее всего двигает твою жизнь."],
+  ["Прочитай первую книгу по этой области","И запиши 5 главных выводов."],
+  ["Пройди онлайн-курс от начала до конца","Бесплатный тоже подходит."],
+  ["Прочитай 5 книг","Чередуй художественные и нехудожественные."],
+  ["Сделай реальный проект на новых знаниях","Его можно показать в портфолио."],
+  ["Научи других: статья, пост или видео","Учить — лучший способ понять."],
+  ["Прочитай 12 книг","Ты в топе по количеству прочитанного."],
+  ["Дойди до уровня B2 в иностранном языке","Это сразу даёт доступ к лучшим материалам и работам."]
+ ]},
+ {k:"will",name:"Путь Воли",stat:"wil",desc:"Дисциплина вместо мотивации.",steps:[
+  ["Запиши 5 своих принципов","По этим правилам ты живёшь, даже когда никто не видит."],
+  ["Выполняй обязательный квест 7 дней подряд","Смотри счётчик серии на главном экране."],
+  ["Продержись 30 дней без одной вредной привычки","Выбери самую вредную."],
+  ["Выполняй обязательный квест 30 дней подряд","Привычка уже формируется."],
+  ["Проведи один день полностью без телефона","Предупреди близких — и вперёд."],
+  ["Продержись 90 дней без вредной привычки","Теперь это часть тебя."],
+  ["Выполняй обязательный квест 100 дней подряд","Немногие доходят до этого шага."]
+ ]},
+ {k:"social",name:"Путь Влияния",stat:"cha",desc:"Люди, связи и умение говорить.",steps:[
+  ["Составь список из 20 людей, с которыми стоит поддерживать связь","Друзья, коллеги, наставники, люди из нужной сферы."],
+  ["Возьми курс ораторского мастерства или начни записывать себя на видео","Голос и речь тренируются."],
+  ["Выступи с речью или презентацией перед группой","Даже 5 минут перед 5 людьми считаются."],
+  ["Найди наставника","Человека на 2–3 шага впереди тебя."],
+  ["Познакомься с 10 новыми людьми из своей сферы","Встречи, конференции, сообщества."],
+  ["4 недели подряд публикуй полезный контент","Раз в неделю: пост, видео, статья."],
+  ["Помоги 5 людям достичь их цели","Сильные связи строятся на ценности."]
+ ]}
+];
+const QUOTES=[
+ "Дисциплина — это выбор между тем, чего хочешь сейчас, и тем, чего хочешь больше всего.",
+ "Ты не поднимешься до уровня своих целей. Ты упадёшь до уровня своих систем.",
+ "Каждый выполненный квест — голос за того, кем ты становишься.",
+ "Мотивация приходит и уходит. Привычки остаются.",
+ "Сегодняшняя боль — завтрашняя сила.",
+ "Сравнивай себя только со вчерашним собой.",
+ "Маленькие шаги каждый день сильнее больших рывков раз в месяц.",
+ "Слабость — это состояние, а не приговор. Состояния меняются.",
+ "Самое трудное — начать. Всё остальное — повторение.",
+ "Деньги идут за ценностью. Становись ценнее.",
+ "Лучшее время начать было вчера. Следующее лучшее — сейчас.",
+ "Тот, кто контролирует утро, контролирует день."
+];
+const DEFAULT_REWARDS=[["Серия любимого сериала",40],["Вечер видеоигр",90],["Любимая еда или десерт",70],["Кино или выход в город",150],["День без задач",250],["Покупка для себя",400]];
+
+/* ================= HELPERS ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+const dk=(d=new Date())=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fromDk=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d,12);};
+const addDays=(k,n)=>{const d=fromDk(k);d.setDate(d.getDate()+n);return dk(d);};
+const daysBetween=(a,b)=>Math.round((fromDk(b)-fromDk(a))/864e5);
+function weekKey(k){const d=fromDk(k);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return dk(d);}
+function hash(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return h>>>0;}
+function rng(seed){let a=seed;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const CHECK='<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+/* ================= STATE / STORAGE ================= */
+const LS="the-system-save-v1";
+let state=null;
+const cloud={ref:null,ok:false,tried:false};
+let saveT=null,chain=Promise.resolve();
+try{const raw=localStorage.getItem(LS);if(raw) state=JSON.parse(raw);}catch(e){}
+
+function save(){
+  if(!state) return;
+  state.updatedAt=Date.now();
+  try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}
+  clearTimeout(saveT);saveT=setTimeout(pushCloud,700);
+}
+function pushCloud(){
+  if(!cloud.ref||!state) return;
+  const payload={s:JSON.stringify(state),t:state.updatedAt||Date.now()};
+  chain=chain.then(()=>cloud.ref.set(payload)).then(()=>{cloud.ok=true;},()=>{cloud.ok=false;});
+}
+async function initCloud(){
+  if(!window.claude||typeof window.claude.use!=="function") return;
+  try{
+    const [db,user]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
+    cloud.tried=true;
+    if(!db||!user) return;
+    const id=await user.id();
+    if(!id) return;
+    cloud.ref=db.doc("data/users/"+id+"/save");
+    const snap=await cloud.ref.get();
+    const d=snap.exists?snap.data():null;
+    if(d&&typeof d.s==="string"&&(!state||(d.t||0)>(state.updatedAt||0))){
+      state=JSON.parse(d.s);
+      try{localStorage.setItem(LS,d.s);}catch(e){}
+      boot();
+    }else if(state){pushCloud();}
+    cloud.ok=true;
+    if(view==="settings") render();
+  }catch(e){}
+}
+
+function newState(name){
+  const today=dk();
+  return {v:1,name,created:today,updatedAt:Date.now(),level:1,xp:0,totalXp:0,gold:0,
+    stats:{str:10,vit:10,int:10,wil:10,cha:10,cap:10},free:0,streak:0,best:0,bosses:0,questsDone:0,
+    lastDay:null,days:{},paths:{money:0,body:0,mind:0,will:0,social:0},boss:{week:null,done:false},
+    custom:[],rewards:DEFAULT_REWARDS.map(([t,c])=>({id:uid(),t,c})),bought:0,log:[],title:"Пробуждённый"};
+}
+
+/* ================= GAME LOGIC ================= */
+const queue=[];
+function notify(tag,title,text,bad){queue.push({tag,title,text,bad});}
+function log(text){state.log.unshift({d:dk(),text});state.log=state.log.slice(0,60);}
+
+function gainXp(n){
+  state.xp+=n;state.totalXp=Math.max(0,state.totalXp+n);
+  while(state.xp>=req(state.level)){
+    const before=rankOf(state.level);
+    state.xp-=req(state.level);state.level++;state.free+=3;
+    const after=rankOf(state.level);
+    if(after!==before){notify("ПОВЫШЕНИЕ РАНГА",`Ранг ${after}`,`Вы стали охотником ранга ${after}. Квесты станут тяжелее, награды — больше.`);log(`Получен ранг ${after}`);}
+    else notify("УРОВЕНЬ ПОВЫШЕН",`Уровень ${state.level}`,"Получено 3 очка характеристик. Распределите их на экране статуса.");
+    log(`Достигнут уровень ${state.level}`);
+  }
+  while(state.xp<0){
+    if(state.level>1){state.level--;state.xp+=req(state.level);state.free=Math.max(0,state.free-3);}
+    else{state.xp=0;break;}
+  }
+}
+function applyQuest(q,sign){
+  gainXp(sign*q.xp);state.gold=Math.max(0,state.gold+sign*q.gold);
+  if(q.stat) state.stats[q.stat]=Math.max(1,state.stats[q.stat]+sign*(q.rank==="A"||q.rank==="S"||q.rank==="B"?2:1));
+  state.questsDone=Math.max(0,state.questsDone+sign);
+}
+function mandTargets(l){
+  const n=Math.min(100,20+2*(l-1));
+  return [["push",`Отжимания — ${n}`],["squat",`Приседания — ${n}`],["abs",`Пресс — ${n}`],["run",`Бег или быстрая ходьба — ${Math.min(10,2+Math.floor((l-1)/6))} км`]];
+}
+function makeQuest(cat,item,kind){
+  const [t,r,h]=item;const xp=QXP[r];
+  return {id:uid(),kind:kind||"daily",cat,t,h,rank:r,stat:POOLS[cat]?POOLS[cat].stat:null,xp,gold:Math.round(xp/3),done:false};
+}
+function genDay(key){
+  const R=rng(hash(key+"|"+state.name));
+  const pick=cat=>{const it=POOLS[cat].items;return makeQuest(cat,it[Math.floor(R()*it.length)]);};
+  const q=[pick("mind"),pick("money"),pick("will"),pick(R()<.5?"social":"body")];
+  if(state.level>=20) q.push(pick(R()<.5?"money":"mind"));
+  for(const c of state.custom) q.push({id:uid(),kind:"custom",cat:"custom",t:c.t,h:"Твой собственный ежедневный квест.",rank:c.r,stat:c.s,xp:QXP[c.r],gold:Math.round(QXP[c.r]/3),done:false});
+  return {q,m:{},mDone:false,lvl:state.level,pen:null,rr:0};
+}
+function ensureToday(){
+  const today=dk();
+  if(state.days[today]){return;}
+  if(state.lastDay&&state.lastDay<today){
+    const last=state.days[state.lastDay];
+    const gap=daysBetween(state.lastDay,today);
+    let missed=0;
+    if(last&&!last.mDone) missed++;
+    missed+=Math.max(0,gap-1);
+    const penUndone=last&&last.pen&&!last.pen.done;
+    if(missed>0||penUndone){
+      const loss=Math.min(3,missed)*30+(penUndone?40:0);
+      const hadStreak=state.streak;
+      state.streak=0;state.xp=Math.max(0,state.xp-loss);state.totalXp=Math.max(0,state.totalXp-loss);
+      notify("ШТРАФНАЯ ЗОНА","Обязательный квест провален",
+        `${missed?`Пропущено дней: ${missed}. `:""}${penUndone?"Штрафной квест не выполнен. ":""}Потеряно ${loss} XP.${hadStreak?` Серия ${hadStreak} дн. сброшена.`:""} Сегодня добавлен штрафной квест.`,true);
+      log(`Штраф: −${loss} XP`);
+    }
+    state.days[today]=genDay(today);
+    if(missed>0||penUndone){
+      const t=PENALTIES[hash(today)%PENALTIES.length];
+      state.days[today].pen={t,done:false,xp:20};
+    }
+  }else{
+    state.days[today]=genDay(today);
+  }
+  state.lastDay=today;
+  // keep 150 days of history
+  const keys=Object.keys(state.days).sort();
+  while(keys.length>150) delete state.days[keys.shift()];
+  // weekly boss
+  const wk=weekKey(today);
+  if(state.boss.week!==wk){state.boss={week:wk,done:false};}
+  save();
+}
+const bossOf=wk=>BOSSES[hash(wk+"boss")%BOSSES.length];
+const today=()=>state.days[dk()];
+
+function toggleQuest(id){
+  const d=today();const q=d.q.find(x=>x.id===id);if(!q) return;
+  q.done=!q.done;applyQuest(q,q.done?1:-1);
+  if(q.done){toast(`Квест выполнен <b>+${q.xp} XP</b> <b style="color:var(--gold)">+${q.gold} ◈</b>`);}
+  save();render();flush();
+}
+function toggleMand(k){
+  const d=today();d.m[k]=!d.m[k];
+  gainXp(d.m[k]?10:-10);
+  const all=mandTargets(d.lvl).every(([key])=>d.m[key]);
+  if(all&&!d.mDone){
+    d.mDone=true;gainXp(40);state.gold+=20;state.stats.str++;state.stats.vit++;
+    state.streak++;state.best=Math.max(state.best,state.streak);
+    notify("КВЕСТ ВЫПОЛНЕН","Подготовка к становлению сильнее",`Награда: +80 XP, +20 ◈, СИЛ +1, ВЫН +1. Серия: ${state.streak} дн. Штрафа не будет.`);
+    log(`Обязательный квест выполнен · серия ${state.streak}`);
+  }else if(!all&&d.mDone){
+    d.mDone=false;gainXp(-40);state.gold=Math.max(0,state.gold-20);state.stats.str--;state.stats.vit--;
+    state.streak=Math.max(0,state.streak-1);
+  }else if(d.m[k]) toast("<b>+10 XP</b>");
+  save();render();flush();
+}
+function togglePen(){
+  const d=today();if(!d.pen) return;d.pen.done=!d.pen.done;gainXp(d.pen.done?d.pen.xp:-d.pen.xp);
+  if(d.pen.done){notify("ШТРАФ СНЯТ","Вы покинули штрафную зону","Система принимает ваше искупление. Не повторяйте ошибку.");log("Штрафной квест выполнен");}
+  save();render();flush();
+}
+function reroll(id){
+  const d=today();if(d.rr>=2) return;
+  const i=d.q.findIndex(x=>x.id===id);const q=d.q[i];if(!q||q.done||!POOLS[q.cat]) return;
+  const used=new Set(d.q.map(x=>x.t));
+  const opts=POOLS[q.cat].items.filter(it=>!used.has(it[0]));
+  if(!opts.length) return;
+  d.q[i]=makeQuest(q.cat,opts[Math.floor(Math.random()*opts.length)]);d.rr++;
+  save();render();
+}
+function completeStep(k){
+  const p=PATHS.find(x=>x.k===k);const i=state.paths[k];if(i>=p.steps.length) return;
+  const xp=100+50*i,gold=40+20*i;
+  state.paths[k]++;gainXp(xp);state.gold+=gold;state.stats[p.stat]+=3;
+  const fin=state.paths[k]>=p.steps.length;
+  notify(fin?"ПУТЬ ПРОЙДЕН":"СЮЖЕТНЫЙ КВЕСТ",fin?p.name:`${p.name}: этап ${i+1}`,`«${p.steps[i][0]}» — выполнено. +${xp} XP, +${gold} ◈, ${STATS[p.stat][1]} +3.`);
+  log(`${p.name}: этап ${i+1} пройден`);
+  save();render();flush();
+}
+function undoStep(k){
+  const p=PATHS.find(x=>x.k===k);const i=state.paths[k]-1;if(i<0) return;
+  state.paths[k]=i;gainXp(-(100+50*i));state.gold=Math.max(0,state.gold-(40+20*i));state.stats[p.stat]=Math.max(1,state.stats[p.stat]-3);
+  save();render();
+}
+function killBoss(){
+  if(state.boss.done) return;
+  const b=bossOf(state.boss.week);
+  state.boss.done=true;state.bosses++;gainXp(300);state.gold+=120;state.stats[b[1]]+=3;
+  notify("БОСС ПОВЕРЖЕН",b[0].split(":")[0],`+300 XP, +120 ◈, ${STATS[b[1]][1]} +3. Новый босс появится в понедельник.`);
+  log(`Повержен босс: ${b[0].split(":")[0]}`);
+  save();render();flush();
+}
+function buy(id){
+  const r=state.rewards.find(x=>x.id===id);if(!r||state.gold<r.c) return;
+  state.gold-=r.c;state.bought++;log(`Награда получена: ${r.t} (−${r.c} ◈)`);
+  notify("НАГРАДА","Вы заслужили это",`«${r.t}». Наслаждайтесь без чувства вины — это оплачено дисциплиной.`);
+  save();render();flush();
+}
+
+function achievements(){
+  const s=state,lv=s.level,st=s.stats;
+  const list=[
+   ["Пробуждённый",true,"Принять роль Игрока"],
+   ["Не сдающийся",s.best>=7,"Серия 7 дней"],
+   ["Железная воля",s.best>=30,"Серия 30 дней"],
+   ["Монарх дисциплины",s.best>=100,"Серия 100 дней"],
+   ["Охотник ранга D",lv>=10,"Уровень 10"],
+   ["Охотник ранга C",lv>=20,"Уровень 20"],
+   ["Охотник ранга B",lv>=35,"Уровень 35"],
+   ["Охотник ранга A",lv>=50,"Уровень 50"],
+   ["Национальный уровень",lv>=70,"Ранг S"],
+   ["Убийца боссов",s.bosses>=4,"Победить 4 боссов"],
+   ["Мудрец",st.int>=40,"ИНТ 40"],
+   ["Титан",st.str>=40,"СИЛ 40"],
+   ["Добытчик",s.paths.money>=6,"Первые деньги на своём навыке"],
+   ["Магнат",s.paths.money>=10,"Пройти Путь Капитала"],
+   ["Тысяча шагов",s.questsDone>=100,"100 выполненных квестов"]
+  ];
+  return list;
+}
+
+/* ================= RENDER ================= */
+let view="status";
+const NAV=[
+ ["status","Статус",'<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/>'],
+ ["quests","Квесты",'<path d="M6 3h12v18l-6-4-6 4z"/>'],
+ ["paths","Пути",'<path d="M4 20c4-1 4-7 8-8s4-7 8-8"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>'],
+ ["shop","Награды",'<path d="M4 9h16v11H4zM2 6h20v3H2zM12 6v14"/><path d="M12 6c-2-4-6-3-5 0M12 6c2-4 6-3 5 0"/>'],
+ ["log","Журнал",'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>']
+];
+function hud(){
+  const r=rankOf(state.level),need=req(state.level),pct=Math.min(100,state.xp/need*100);
+  return `<header class="hud"><div class="hud-row">
+   <div class="rank-badge" aria-label="Ранг ${r}">${r}</div>
+   <div class="who"><div class="name">${esc(state.name)}</div><div class="title">[ ${esc(state.title)} ]</div></div>
+   <div class="lvl"><small>УРОВЕНЬ</small><b>${state.level}</b></div></div>
+   <div class="xpbar"><i style="width:${pct}%"></i></div>
+   <div class="hud-meta"><span class="mono">${state.xp} / ${need} XP</span><span class="mono gold">${state.gold} ◈</span></div></header>`;
+}
+function navHtml(){
+  const d=today();const pending=d&&(!d.mDone||(d.pen&&!d.pen.done));
+  return NAV.map(([k,l,ic])=>`<button data-act="view" data-k="${k}" class="${view===k?"on":""} ${k==="quests"&&pending?"dot":""}" aria-label="${l}"><svg viewBox="0 0 24 24">${ic}</svg>${l}</button>`).join("");
+}
+function render(){
+  if(!state){renderAwake();return;}
+  $("#nav").hidden=false;$("#navIn").innerHTML=navHtml();
+  const body={status:vStatus,quests:vQuests,paths:vPaths,shop:vShop,log:vLog,settings:vSettings}[view]();
+  $("#app").innerHTML=hud()+`<div class="stack">${body}</div>`;
+}
+function renderAwake(){
+  $("#nav").hidden=true;
+  $("#app").innerHTML=`<div class="awake"><div class="win">
+   <span class="tag">[ УВЕДОМЛЕНИЕ ]</span>
+   <h1>Вы получили право стать Игроком</h1>
+   <p>Система будет каждый день выдавать задания. За выполнение — опыт, золото и рост характеристик. За провал — штрафная зона.</p>
+   <ul><li>Обязательный ежедневный квест на тело</li><li>Задания на разум, деньги, волю и людей</li><li>Сюжетные пути на месяцы вперёд</li><li>Босс каждую неделю</li><li>Награды за золото — отдых без чувства вины</li></ul>
+   <form id="awakeForm" class="form"><label for="nm" class="tag">Как вас зовут, Игрок?</label>
+   <input id="nm" maxlength="30" placeholder="Имя" required autocomplete="off">
+   <button class="btn solid" type="submit">Принять</button></form></div></div>`;
+}
+function statBlock(){
+  const max=Math.max(40,...Object.values(state.stats));
+  return Object.entries(STATS).map(([k,[n,a]])=>`<div class="st"><div class="st-top"><span>${n} <span class="dim mono" style="font-size:11px">${a}</span></span>
+   <span class="row" style="gap:8px"><b>${state.stats[k]}</b>${state.free?`<button class="plus" data-act="alloc" data-k="${k}" aria-label="Добавить очко в ${n}">+</button>`:""}</span></div>
+   <div class="st-bar"><i style="width:${state.stats[k]/max*100}%"></i></div></div>`).join("");
+}
+function vStatus(){
+  const d=today();const done=d.q.filter(x=>x.done).length+(d.mDone?1:0),total=d.q.length+1;
+  const q=QUOTES[hash(dk())%QUOTES.length];
+  const b=bossOf(state.boss.week);
+  return `<section class="win"><div class="win-h"><span class="tag">[ Сегодня ]</span><span class="mono dim" style="font-size:12px">${fromDk(dk()).toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}</span></div>
+   <div class="kpis"><div class="kpi"><b class="mono">${done}/${total}</b><span>квестов</span></div><div class="kpi"><b class="mono">${state.streak}</b><span>серия дней</span></div><div class="kpi"><b class="mono">${state.totalXp}</b><span>всего XP</span></div></div>
+   ${!d.mDone?`<p class="warn">Обязательный квест не выполнен. Если не выполнить его до полуночи, будет штраф.</p>`:`<p class="ok">Обязательный квест выполнен. Сегодня штрафа не будет.</p>`}
+   <div class="row" style="margin-top:12px"><button class="btn solid" data-act="view" data-k="quests">Открыть квесты</button></div></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Характеристики ]</span>${state.free?`<span class="mono gold" style="font-size:12px">Свободных очков: ${state.free}</span>`:""}</div>
+   <div class="stats">${statBlock()}</div>
+   <p class="lead" style="margin-top:12px">Характеристики растут от квестов своей категории. За каждый новый уровень — 3 свободных очка.</p></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Босс недели ]</span>${state.boss.done?'<span class="chip" style="color:var(--green)">ПОВЕРЖЕН</span>':'<span class="chip r-S">АКТИВЕН</span>'}</div>
+   <h2>${esc(b[0])}</h2><p class="lead">${esc(b[2])}</p>
+   <div class="q-meta"><span class="chip xp">+300 XP</span><span class="chip g">+120 ◈</span><span class="chip">${STATS[b[1]][1]} +3</span></div>
+   ${state.boss.done?"":`<div class="row" style="margin-top:12px"><button class="btn danger" data-act="boss">Босс повержен</button></div>`}</section>
+  <section class="win"><span class="tag">[ Совет Системы ]</span><p class="quote" style="margin-top:10px">${esc(q)}</p></section>
+  <div class="row" style="justify-content:center"><button class="mini" data-act="view" data-k="settings">Настройки и резервная копия</button></div>`;
+}
+function vQuests(){
+  const d=today();const mt=mandTargets(d.lvl);
+  const qs=d.q.map(q=>`<div class="q ${q.done?"done":""}"><button class="chk" data-act="q" data-id="${q.id}" aria-label="Отметить квест">${CHECK}</button>
+    <div class="q-body"><div class="q-t">${esc(q.t)}</div><div class="q-hint">${esc(q.h)}</div>
+    <div class="q-meta"><span class="chip r-${q.rank}">${q.rank}</span><span class="chip xp">+${q.xp} XP</span><span class="chip g">+${q.gold} ◈</span>${q.stat?`<span class="chip">${STATS[q.stat][1]}</span>`:""}
+    ${!q.done&&POOLS[q.cat]&&d.rr<2?`<button class="mini" data-act="reroll" data-id="${q.id}">Заменить (${2-d.rr})</button>`:""}</div></div></div>`).join("");
+  return `${d.pen?`<section class="win" style="border-color:rgba(255,111,125,.5)"><div class="win-h"><span class="tag" style="color:var(--red)">[ Штрафной квест ]</span></div>
+    <div class="q pen ${d.pen.done?"done":""}"><button class="chk" data-act="pen" aria-label="Отметить штрафной квест">${CHECK}</button><div class="q-body"><div class="q-t">${esc(d.pen.t)}</div><div class="q-hint">Если не выполнить до полуночи, потеряете ещё 40 XP.</div><div class="q-meta"><span class="chip xp">+${d.pen.xp} XP</span></div></div></div></section>`:""}
+  <section class="win mand"><div class="win-h"><span class="tag">[ Ежедневный квест ]</span><span class="chip ${d.mDone?"":"r-S"}">${d.mDone?"ВЫПОЛНЕН":"ОБЯЗАТЕЛЬНЫЙ"}</span></div>
+   <h2>Подготовка к становлению сильнее</h2><p class="lead" style="margin-bottom:12px">Объём растёт с уровнем. Можно делать частями в течение дня.</p>
+   <div class="mand-goal">${mt.map(([k,t])=>`<button class="mg ${d.m[k]?"done":""}" data-act="m" data-k="${k}"><span class="chk">${CHECK}</span><span>${t}</span></button>`).join("")}</div>
+   <div class="q-meta" style="margin-top:12px"><span class="chip xp">+10 XP за пункт</span><span class="chip xp">+40 XP бонус</span><span class="chip g">+20 ◈</span><span class="chip">СИЛ +1 · ВЫН +1</span></div>
+   ${d.mDone?"":`<p class="warn">Провал: −30 XP, сброс серии и штрафной квест завтра.</p>`}</section>
+  <section class="win"><div class="win-h"><span class="tag">[ Задания Системы ]</span><span class="mono dim" style="font-size:12px">обновятся завтра</span></div>${qs}</section>
+  <section class="win"><div class="win-h"><span class="tag">[ Свой квест ]</span></div><p class="lead">Добавь ежедневную привычку, которую Система будет выдавать каждый день.</p>
+   <form id="customForm" class="form"><input id="cT" maxlength="80" placeholder="Например: 30 минут учить Python" required>
+   <div class="two"><select id="cS" aria-label="Характеристика">${Object.entries(STATS).map(([k,[n]])=>`<option value="${k}">${n}</option>`).join("")}</select>
+   <select id="cR" aria-label="Сложность">${Object.keys(QXP).map(r=>`<option value="${r}" ${r==="D"?"selected":""}>Ранг ${r} · ${QXP[r]} XP</option>`).join("")}</select></div>
+   <button class="btn" type="submit">Добавить квест</button></form>
+   ${state.custom.length?`<div style="margin-top:12px">${state.custom.map(c=>`<div class="rw"><div class="t">${esc(c.t)} <span class="chip r-${c.r}">${c.r}</span></div><button class="x" data-act="delCustom" data-id="${c.id}" aria-label="Удалить">×</button></div>`).join("")}</div>`:""}</section>`;
+}
+function vPaths(){
+  return `<section class="win"><div class="win-h"><span class="tag">[ Сюжетные квесты ]</span></div>
+   <p class="lead" style="margin-bottom:14px">Долгие пути на месяцы. Этапы открываются по порядку, награда растёт с каждым этапом. Отмечай этап, только когда он действительно выполнен.</p>
+   ${PATHS.map(p=>{const i=state.paths[p.k],n=p.steps.length,fin=i>=n;
+    return `<div class="path"><div class="path-h"><h3>${p.name}</h3><span class="mono dim" style="font-size:12px">${Math.min(i,n)}/${n}</span></div>
+    <div class="steps">${p.steps.map((_,j)=>`<i class="${j<i?"on":""}"></i>`).join("")}</div>
+    ${fin?`<p class="ok" style="margin:0">Путь пройден. ${esc(p.desc)}</p>`:
+    `<div class="cur">Этап ${i+1}. ${esc(p.steps[i][0])}</div><div class="q-hint">${esc(p.steps[i][1])}</div>
+     <div class="q-meta"><span class="chip xp">+${100+50*i} XP</span><span class="chip g">+${40+20*i} ◈</span><span class="chip">${STATS[p.stat][1]} +3</span></div>
+     <div class="row" style="margin-top:10px"><button class="btn" data-act="step" data-k="${p.k}">Этап выполнен</button>${i>0?`<button class="mini" data-act="undoStep" data-k="${p.k}">Отменить прошлый</button>`:""}</div>`}</div>`;}).join("")}</section>`;
+}
+function vShop(){
+  return `<section class="win"><div class="win-h"><span class="tag">[ Магазин наград ]</span><span class="mono gold">${state.gold} ◈</span></div>
+   <p class="lead" style="margin-bottom:8px">Золото — за квесты. Трать его на удовольствия, и отдых станет заслуженным, а не побегом.</p>
+   ${state.rewards.map(r=>`<div class="rw"><div class="t">${esc(r.t)}</div><button class="btn goldb" data-act="buy" data-id="${r.id}" ${state.gold<r.c?"disabled":""}>${r.c} ◈</button><button class="x" data-act="delReward" data-id="${r.id}" aria-label="Удалить награду">×</button></div>`).join("")}
+   <form id="rewardForm" class="form"><div class="two"><input id="rT" maxlength="60" placeholder="Своя награда" required><input id="rC" type="number" min="1" max="99999" placeholder="Цена ◈" required></div><button class="btn" type="submit">Добавить награду</button></form></section>`;
+}
+function vLog(){
+  const t=dk();const start=addDays(t,-34);let cells="";
+  const off=(fromDk(start).getDay()+6)%7;
+  for(let i=0;i<off;i++) cells+=`<i style="visibility:hidden"></i>`;
+  for(let i=0;i<35;i++){const k=addDays(start,i);const d=state.days[k];let c="";
+    if(d){const n=d.q.filter(x=>x.done).length+(d.mDone?2:0),tot=d.q.length+2;const r=n/tot;c=r>=.85?"l3":r>=.5?"l2":r>0?"l1":"";if(!d.mDone&&k<t)c+=" miss";}
+    if(k<state.created) c="";
+    cells+=`<i class="${c} ${k===t?"today":""}" title="${k}"></i>`;}
+  const ach=achievements();
+  return `<section class="win"><div class="win-h"><span class="tag">[ Последние 5 недель ]</span></div>
+   <div class="heat">${cells}</div>
+   <div class="legend"><span>Пн — Вс</span><span>Ярче — больше выполнено</span><span style="color:var(--red)">Красная рамка — провал</span></div></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Рекорды ]</span></div>
+   <div class="kpis"><div class="kpi"><b class="mono">${state.best}</b><span>лучшая серия</span></div><div class="kpi"><b class="mono">${state.questsDone}</b><span>квестов</span></div><div class="kpi"><b class="mono">${state.bosses}</b><span>боссов</span></div></div></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Титулы ]</span></div><p class="lead" style="margin-bottom:10px">Нажмите на открытый титул, чтобы носить его.</p>
+   <div class="titles">${ach.map(([n,ok,c])=>`<button class="ttl ${ok?"":"lock"} ${state.title===n?"on":""}" ${ok?`data-act="title" data-n="${esc(n)}"`:"disabled"} title="${esc(c)}">${esc(n)}${ok?"":` · <span class="dim">${esc(c)}</span>`}</button>`).join("")}</div></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Журнал Системы ]</span></div>
+   ${state.log.length?`<ul class="log">${state.log.slice(0,25).map(l=>`<li><time>${l.d.slice(5).split("-").reverse().join(".")}</time><span>${esc(l.text)}</span></li>`).join("")}</ul>`:'<p class="lead">Здесь появятся ваши победы и провалы.</p>'}</section>`;
+}
+let confirmReset=false;
+function vSettings(){
+  return `<section class="win"><div class="win-h"><span class="tag">[ Игрок ]</span></div>
+   <form id="nameForm" class="form"><label for="nm2" class="dim" style="font-size:13px">Имя</label><input id="nm2" maxlength="30" value="${esc(state.name)}"><button class="btn" type="submit">Сохранить имя</button></form>
+   <p class="lead" style="margin-top:12px">${cloud.ref&&cloud.ok?"Прогресс сохраняется в вашем аккаунте Claude и доступен на любом устройстве.":"Прогресс сохраняется на этом устройстве. Делайте резервную копию."}</p></section>
+  <section class="win"><div class="win-h"><span class="tag">[ Резервная копия ]</span></div>
+   <p class="lead">Скопируйте код и сохраните в заметках. Чтобы восстановить, вставьте его и нажмите «Загрузить».</p>
+   <textarea id="bk" aria-label="Код резервной копии" style="margin-top:10px">${esc(JSON.stringify(state))}</textarea>
+   <div class="row" style="margin-top:8px"><button class="btn" data-act="copy">Скопировать</button><button class="btn" data-act="import">Загрузить из поля</button></div></section>
+  <section class="win"><div class="win-h"><span class="tag" style="color:var(--red)">[ Сброс ]</span></div>
+   <p class="lead">Удалит весь прогресс без возможности восстановления.</p>
+   <div class="row" style="margin-top:10px"><button class="btn danger" data-act="reset">${confirmReset?"Точно удалить всё?":"Начать заново"}</button>${confirmReset?'<button class="mini" data-act="cancelReset">Отмена</button>':""}</div></section>
+  <div class="row" style="justify-content:center"><button class="mini" data-act="view" data-k="status">Назад к статусу</button></div>`;
+}
+
+/* ================= UI FX ================= */
+let toastT=null;
+function toast(html){
+  let el=$("#toast");if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");document.body.appendChild(el);}
+  el.innerHTML=html;el.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>{el.style.opacity=0;},1800);
+}
+function flush(){
+  if($("#layer").firstChild||!queue.length) return;
+  const n=queue.shift();
+  $("#layer").innerHTML=`<div class="sys ${n.bad?"bad":""}" role="dialog" aria-modal="true"><div class="win"><span class="tag">[ ${esc(n.tag)} ]</span><h2>${esc(n.title)}</h2><p>${esc(n.text)}</p><button class="btn solid" data-act="closeSys">Понятно</button></div></div>`;
+  const b=$("#layer .btn");if(b) b.focus();
+}
+
+/* ================= EVENTS ================= */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-act]");if(!el) return;
+  const a=el.dataset.act,id=el.dataset.id,k=el.dataset.k;
+  switch(a){
+    case "view":view=k;confirmReset=false;render();window.scrollTo(0,0);break;
+    case "q":toggleQuest(id);break;
+    case "m":toggleMand(k);break;
+    case "pen":togglePen();break;
+    case "reroll":reroll(id);break;
+    case "step":completeStep(k);break;
+    case "undoStep":undoStep(k);break;
+    case "boss":killBoss();break;
+    case "buy":buy(id);break;
+    case "alloc":if(state.free>0){state.free--;state.stats[k]++;save();render();}break;
+    case "delReward":state.rewards=state.rewards.filter(r=>r.id!==id);save();render();break;
+    case "delCustom":state.custom=state.custom.filter(c=>c.id!==id);save();render();break;
+    case "title":state.title=el.dataset.n;save();render();break;
+    case "closeSys":$("#layer").innerHTML="";flush();break;
+    case "copy":{const ta=$("#bk");const txt=ta.value;
+      const fb=()=>{ta.focus();ta.select();toast("Выделено — скопируйте вручную");};
+      try{navigator.clipboard.writeText(txt).then(()=>toast("Скопировано"),fb);}catch(err){fb();}break;}
+    case "import":{try{const s=JSON.parse($("#bk").value);if(!s||!s.stats||!s.days) throw 0;state=s;save();ensureToday();toast("Прогресс загружен");render();}catch(err){toast("Код не подходит. Проверьте, что скопирован полностью.");}break;}
+    case "reset":if(!confirmReset){confirmReset=true;render();}else{state=null;confirmReset=false;try{localStorage.removeItem(LS);}catch(err){}if(cloud.ref) chain=chain.then(()=>cloud.ref.delete()).catch(()=>{});view="status";render();}break;
+    case "cancelReset":confirmReset=false;render();break;
+  }
+});
+document.addEventListener("submit",e=>{
+  e.preventDefault();const f=e.target;
+  if(f.id==="awakeForm"){const n=$("#nm").value.trim();if(!n) return;state=newState(n);log("Игрок пробудился");ensureToday();
+    notify("СИСТЕМА","Добро пожаловать, Игрок",`${n}, ваш путь начинается с ранга E. Выполните обязательный квест сегодня, иначе попадёте в штрафную зону.`);view="quests";render();flush();}
+  if(f.id==="customForm"){const t=$("#cT").value.trim();if(!t) return;const c={id:uid(),t,s:$("#cS").value,r:$("#cR").value};state.custom.push(c);
+    today().q.push({id:uid(),kind:"custom",cat:"custom",t:c.t,h:"Твой собственный ежедневный квест.",rank:c.r,stat:c.s,xp:QXP[c.r],gold:Math.round(QXP[c.r]/3),done:false});save();render();toast("Квест добавлен");}
+  if(f.id==="rewardForm"){const t=$("#rT").value.trim(),c=parseInt($("#rC").value,10);if(!t||!(c>0)) return;state.rewards.push({id:uid(),t,c});save();render();}
+  if(f.id==="nameForm"){const n=$("#nm2").value.trim();if(n){state.name=n;save();render();toast("Имя сохранено");}}
+});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state&&!state.days[dk()]){ensureToday();render();flush();}});
+setInterval(()=>{if(state&&!state.days[dk()]){ensureToday();render();flush();}},60000);
+
+function boot(){if(state){ensureToday();}render();flush();}
+boot();
+initCloud();
+})();
+</script>
+
+</body></html>
